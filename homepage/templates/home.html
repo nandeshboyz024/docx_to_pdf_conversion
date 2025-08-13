@@ -1,0 +1,19 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Submit a New Conversion Job</title>
+</head>
+<body>
+    <h1>Submit a New Conversion Job</h1>
+    <form action="{% url 'submit_job'%}" method="post" enctype="multipart/form-data">
+        {% csrf_token %}
+        
+        <label for="files">Select DOCX files:</label>
+        <input type="file" id="files" name="files" accept=".docx" multiple required>
+        
+        <br><br>
+        <button type="submit">Submit Job</button>
+    </form>
+
+</body>
+</html>
