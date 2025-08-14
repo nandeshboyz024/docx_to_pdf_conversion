@@ -9,7 +9,7 @@ docker compose build
 
 # Start containers
 ```
-docker compose up -d
+docker compose up
 ```
 
 # Apply Django Migrations Inside Container
