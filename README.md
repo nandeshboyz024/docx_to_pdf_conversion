@@ -2,6 +2,8 @@
 
 This guide will help you set up the development environment, run the application in Docker, and apply database migrations.
 
+(Setup Link)[https://drive.google.com/file/d/1YR9EseaJbK7LsLqLKtjZkZJdCstEY5tf/view?usp=sharing]
+
 # Build images
 ```
 docker compose build
