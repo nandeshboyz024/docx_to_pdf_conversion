@@ -1,12 +1,22 @@
 import os
 import zipfile
 import pypandoc
+import shutil
 from celery import shared_task
 from django.conf import settings
 from homepage.models import Job  # import the Job model
 
 OUTPUT_DIR = os.path.join(settings.BASE_DIR, "temp_outputs")
 os.makedirs(OUTPUT_DIR, exist_ok=True)
+
+def is_valid_docx(file_path):
+    """Basic validation for DOCX format"""
+    return file_path.lower().endswith(".docx") and os.path.exists(file_path) and os.path.getsize(file_path) > 0
+
+def has_enough_disk_space(required_mb=10):
+    """Conceptual disk space check (default 10MB free space)"""
+    total, used, free = shutil.disk_usage(OUTPUT_DIR)
+    return free > required_mb * 1024 * 1024
 
 def update_job_in_db(job_id, status_data):
     """Update the Job model in PostgreSQL"""
@@ -36,10 +46,18 @@ def process_job_task(job_id, saved_files):
         update_job_in_db(job_id, status_data)
 
         try:
+            # Check if file is valid DOCX
+            if not is_valid_docx(file_path):
+                raise ValueError("Invalid or corrupted DOCX file")
+
+            # Check disk space before processing
+            if not has_enough_disk_space():
+                raise OSError("Insufficient disk space")
+            
             pdf_path = os.path.splitext(file_path)[0] + ".pdf"
 
             # Convert DOCX to PDF using pypandoc
-            pypandoc.convert_file(file_path, 'pdf', outputfile=pdf_path)
+            pypandoc.convert_file(file_path, 'pdf', outputfile=pdf_path, extra_args=['--extract-media=./temp_media'])
 
             if os.path.exists(pdf_path):
                 processed_files.append((pdf_path, os.path.basename(pdf_path)))
