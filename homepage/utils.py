@@ -1,20 +1,22 @@
-import os
-import json
-from django.conf import settings
-
-JOB_META_DIR = os.path.join(settings.BASE_DIR, "job_metadata")
-os.makedirs(JOB_META_DIR, exist_ok=True)
+from .models import Job
 
 def update_job_status(job_id, status_data):
-    """Save job status as JSON in a file."""
-    file_path = os.path.join(JOB_META_DIR, f"{job_id}.json")
-    with open(file_path, "w") as f:
-        json.dump(status_data, f)
+    try:
+        job, _ = Job.objects.get_or_create(id=job_id)
+        job.status = status_data.get("status", job.status)
+        job.files = status_data.get("files", job.files)
+        job.zip_path = status_data.get("zip_path", job.zip_path)
+        job.save()
+    except Exception as e:
+        print(f"Error updating job {job_id}: {e}")
 
 def get_job_status(job_id):
-    """Load job status from file."""
-    file_path = os.path.join(JOB_META_DIR, f"{job_id}.json")
-    if os.path.exists(file_path):
-        with open(file_path, "r") as f:
-            return json.load(f)
-    return None
+    try:
+        job = Job.objects.get(id=job_id)
+        return {
+            "status": job.status,
+            "files": job.files,
+            "zip_path": job.zip_path
+        }
+    except Job.DoesNotExist:
+        return None

@@ -1,17 +1,18 @@
 import os
-import uuid
 from django.conf import settings
 from django.http import JsonResponse, FileResponse, HttpResponse
-from django.template import loader
+from django.shortcuts import render
 from django.views.decorators.csrf import csrf_exempt
 from django.views.decorators.http import require_POST
 from .tasks import process_job_task
-from .utils import update_job_status, get_job_status
+from homepage.models import Job  # Import Job model
+import uuid
 
 UPLOAD_DIR = os.path.join(settings.BASE_DIR, "temp_uploads")
 OUTPUT_DIR = os.path.join(settings.BASE_DIR, "temp_outputs")
 os.makedirs(UPLOAD_DIR, exist_ok=True)
 os.makedirs(OUTPUT_DIR, exist_ok=True)
+
 
 @csrf_exempt
 @require_POST
@@ -21,12 +22,13 @@ def submit_job(request):
         return JsonResponse({"error": "No files uploaded"}, status=400)
 
     job_id = str(uuid.uuid4())
-    status_data = {
-        "status": "PENDING",
-        "files": {file.name: "PENDING" for file in files},
-        "zip_path": ""
-    }
-    update_job_status(job_id, status_data)
+    # Create Job entry in PostgreSQL
+    job = Job.objects.create(
+        id=job_id,
+        status="PENDING",
+        files={file.name: "PENDING" for file in files},
+        zip_path=""
+    )
 
     saved_files = []
     for file in files:
@@ -39,37 +41,42 @@ def submit_job(request):
     # Send job to Celery worker
     process_job_task.delay(job_id, saved_files)
 
-    return JsonResponse({"job_id": job_id, "status": "PENDING"})
+    return JsonResponse({"job_id": job_id, "status": job.status})
 
 
 def job_status(request, job_id):
-    job_data = get_job_status(job_id)
-    if not job_data:
+    try:
+        job = Job.objects.get(id=job_id)
+    except Job.DoesNotExist:
         return JsonResponse({"error": "Job not found"}, status=404)
 
     response = {
         "job_id": job_id,
-        "status": job_data["status"],
-        "files": job_data["files"]
+        "status": job.status,
+        "files": job.files
     }
 
-    if job_data["status"] == "COMPLETED":
+    if job.status == "COMPLETED":
         response["download_url"] = f"/download/{job_id}/"
 
     return JsonResponse(response)
 
 
 def download_zip(request, job_id):
-    job_data = get_job_status(job_id)
-    if not job_data or job_data["status"] != "COMPLETED":
+    try:
+        job = Job.objects.get(id=job_id)
+    except Job.DoesNotExist:
+        return JsonResponse({"error": "Job not found"}, status=404)
+
+    if job.status != "COMPLETED":
         return JsonResponse({"error": "File not ready"}, status=404)
 
-    zip_path = job_data["zip_path"]
+    zip_path = job.zip_path
     if not os.path.exists(zip_path):
         return JsonResponse({"error": "File not found"}, status=404)
 
     return FileResponse(open(zip_path, 'rb'), as_attachment=True, filename=f"{job_id}.zip")
 
+
 def myPage(request):
-    template = loader.get_template("home.html")
-    return HttpResponse(template.render())
+    return render(request,'home.html')
